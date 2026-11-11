@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이유식 달력</title>
+  <link rel="stylesheet" href="style.css" />
+  <script>document.documentElement.dataset.theme = localStorage.getItem("baby-food-theme") === "dark" ? "dark" : "light";</script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="month-navigation">
+        <button class="nav-button" id="prevMonth" aria-label="이전 달">‹</button>
+        <div class="month-title" id="monthTitle"></div>
+        <button class="nav-button" id="nextMonth" aria-label="다음 달">›</button>
+      </div>
+      <div class="header-actions">
+        <button class="today-button" id="ingredientToggle" title="먹어본 재료">🥕<span class="btn-text"> 재료</span></button>
+        <button class="today-button" id="noteButton" title="메모">📝<span class="btn-text"> 메모</span></button>
+        <button class="today-button" id="todayButton">오늘</button>
+        <button class="today-button" id="settingsButton" title="설정">⚙️<span class="btn-text"> 설정</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app">
+
+    <div class="layout">
+    <section class="calendar">
+      <div class="weekdays">
+        <div class="weekday">일</div>
+        <div class="weekday">월</div>
+        <div class="weekday">화</div>
+        <div class="weekday">수</div>
+        <div class="weekday">목</div>
+        <div class="weekday">금</div>
+        <div class="weekday">토</div>
+      </div>
+
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </section>
+  <aside class="ingredient-card" id="ingredientCard">
+    <div class="ingredient-head">
+      <strong>🥕 먹어본 재료</strong>
+      <button class="entry-btn" id="ingredientClose">닫기</button>
+    </div>
+    <form class="ingredient-form" id="ingredientForm">
+      <input type="text" id="ingredientInput" placeholder="재료, 키워드, …" />
+      <select id="ingredientCategory" aria-label="카테고리"></select>
+      <button type="submit" class="entry-btn">추가</button>
+    </form>
+    <div class="ingredient-filter" id="ingredientFilter"></div>
+    <div class="ingredient-hint">메뉴에 든 재료는 카테고리 색 점으로 표시돼요. 카테고리를 고르면 해당 색만 보여요.</div>
+    <div class="ingredient-list" id="ingredientList"></div>
+  </aside>
+      <div class="ingredient-backdrop" id="ingredientBackdrop"></div>
+    </div>
+  </main>
+
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2 class="modal-title" id="modalDate"></h2>
+      <div class="modal-sub" id="modalSub"></div>
+
+      <div class="entry-list" id="entryList"></div>
+
+      <div class="form-title" id="formTitle">새 기록 추가</div>
+
+      <div class="input-group">
+        <label for="mealName">이유식 메뉴</label>
+        <input type="text" id="mealName" placeholder="예: 소고기 감자 미음" />
+      </div>
+
+      <div class="input-group">
+        <label for="mealAmount">먹은 양</label>
+        <div class="amount-row">
+          <input type="number" id="mealAmount" min="0" step="any" inputmode="decimal" placeholder="예: 80" />
+          <span class="amount-unit">g</span>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label for="mealMemo">메모</label>
+        <textarea id="mealMemo" placeholder="섭취량이나 특이사항을 기록하세요."></textarea>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="button memo" id="memoButton">📝 오늘의 메모</button>
+        <button class="button secondary" id="cancelButton">닫기</button>
+        <button class="button primary" id="saveButton">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay memo-overlay" id="memoOverlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2 class="modal-title" id="memoTitle"></h2>
+      <div class="input-group">
+        <label for="dayMemoInput">오늘의 메모</label>
+        <textarea id="dayMemoInput" placeholder="컨디션, 배변, 알레르기 반응 등을 자유롭게 적어두세요."></textarea>
+      </div>
+      <div class="modal-buttons">
+        <button class="button secondary" id="memoCancel">취소</button>
+        <button class="button primary" id="memoSave">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settingsOverlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2 class="modal-title">⚙️ 설정</h2>
+
+      <div class="input-group">
+        <label for="startDateInput">이유식 시작일</label>
+        <input type="date" id="startDateInput" />
+        <div class="start-info" id="startInfo"></div>
+      </div>
+
+      <div class="input-group">
+        <label for="dDayDateInput">D-Day 기준 (기준일 / 그날의 D+ 숫자)</label>
+        <div class="d-day-controls">
+          <input type="date" id="dDayDateInput" />
+          <input type="number" id="dDayNumberInput" min="0" placeholder="예: 159" aria-label="기준일의 D+ 숫자" />
+        </div>
+      </div>
+
+      <div class="input-group setting-row">
+        <label for="themeToggle">다크모드</label>
+        <button type="button" class="theme-toggle" id="themeToggle" role="switch" aria-checked="false"><span class="theme-toggle-knob"></span></button>
+      </div>
+
+      <div class="input-group">
+        <label>데이터 백업</label>
+        <div class="backup-row">
+          <button class="button secondary" id="exportButton" type="button">⬇️ 내보내기</button>
+          <button class="button secondary" id="importButton" type="button">⬆️ 불러오기</button>
+        </div>
+        <div class="backup-hint">설정, 이유식 기록, 재료, 메모를 JSON 파일 하나로 저장하거나 불러와요.</div>
+        <input type="file" id="importFile" accept=".json,application/json" hidden />
+      </div>
+
+      <div class="modal-buttons">
+        <button class="button primary" id="settingsClose">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="noteOverlay">
+    <div class="modal note-modal" role="dialog" aria-modal="true">
+      <h2 class="modal-title">📝 메모</h2>
+
+      <div class="tabs">
+        <button class="tab active" id="noteTabMonth" type="button"></button>
+        <button class="tab" id="noteTabCommon" type="button">전체 공통</button>
+      </div>
+
+      <div class="input-group">
+        <textarea id="noteMonthInput" placeholder="이 달에만 해당하는 메모를 적어두세요."></textarea>
+        <textarea id="noteCommonInput" placeholder="모든 달에 공통으로 볼 메모 (알레르기, 주의사항 등)" hidden></textarea>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="button secondary" id="noteCancel">취소</button>
+        <button class="button primary" id="noteSave">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="ingredientEditOverlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2 class="modal-title">🥕 재료 수정</h2>
+
+      <div class="input-group">
+        <label for="ingEditName">재료 이름</label>
+        <input type="text" id="ingEditName" />
+      </div>
+
+      <div class="input-group">
+        <label for="ingEditAliases">인식 키워드 (쉼표로 구분)</label>
+        <input type="text" id="ingEditAliases" placeholder="예: 한우, 쇠고기" />
+      </div>
+
+      <div class="input-group">
+        <label for="ingEditCategory">카테고리</label>
+        <select id="ingEditCategory"></select>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="button secondary" id="ingEditCancel">취소</button>
+        <button class="button primary" id="ingEditSave">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
