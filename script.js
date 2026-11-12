@@ -19,6 +19,8 @@ const INGREDIENT_CATEGORIES = [...Object.keys(INGREDIENT_DEFAULTS), "기타"];
 let ingredientFilter = "전체";
 const NOTES_KEY = "baby-food-notes"; // { common: "", months: { "YYYY-MM": "" } }
 const DAY_MEMO_KEY = "baby-food-day-memos"; // { "YYYY-MM-DD": "메모" }
+const EXCLUDED_KEY = "baby-food-excluded-words"; // 빨간 표시에서 제외할 단어 ["미음", ...]
+const EXCLUDED_DEFAULTS = ["미음", "죽", "퓨레", "무른밥", "진밥", "밥", "수프", "육수", "이유식", "국", "볶음", "찜"];
 const CATEGORY_COLORS = {
   "곡류": "#e6c34a",
   "채소류": "#6cbf84",
@@ -41,6 +43,7 @@ const formTitle = document.getElementById("formTitle");
 const mealName = document.getElementById("mealName");
 const mealMemo = document.getElementById("mealMemo");
 const mealAmount = document.getElementById("mealAmount");
+const unknownHint = document.getElementById("unknownHint");
 const cancelButton = document.getElementById("cancelButton");
 const saveButton = document.getElementById("saveButton");
 const startDateInput = document.getElementById("startDateInput");
@@ -69,6 +72,17 @@ INGREDIENT_CATEGORIES.forEach((cat) => {
   option.value = option.textContent = cat;
   ingredientCategory.appendChild(option);
 });
+
+// Lucide 라인 아이콘 (CDN). 동적으로 만든 <i data-lucide>는 refreshIcons()로 SVG 변환
+function icon(name) {
+  const el = document.createElement("i");
+  el.dataset.lucide = name;
+  return el;
+}
+
+function refreshIcons() {
+  if (window.lucide) lucide.createIcons();
+}
 
 let currentDate = new Date();
 let selectedDateKey = null;
@@ -160,7 +174,7 @@ function termRegex(term) {
 
 // 텍스트(메뉴명+메모)에 들어 있는 재료 id 집합.
 // 긴 단어부터 소거해서 '양배추'가 '배'로, '찹쌀'이 '쌀'로 중복 집계되지 않게 함
-function matchedIngredients(text, ingredients) {
+function scanIngredients(text, ingredients) {
   const terms = [];
   ingredients.forEach((ing) => {
     [ing.name, ...(ing.aliases || [])].forEach((t) => t && terms.push({ t, id: ing.id }));
@@ -182,7 +196,88 @@ function matchedIngredients(text, ingredients) {
       rest = rest.split(t).join(mask);
     }
   });
-  return hit;
+  return { hit, rest }; // rest: 재료로 인식된 글자는 \u0000으로 가려진 문자열
+}
+
+function matchedIngredients(text, ingredients) {
+  return scanIngredients(text, ingredients).hit;
+}
+
+function getExcludedWords() {
+  const saved = readJSON(EXCLUDED_KEY, null);
+  return Array.isArray(saved) ? saved : EXCLUDED_DEFAULTS;
+}
+
+function saveExcludedWords(list) {
+  localStorage.setItem(EXCLUDED_KEY, JSON.stringify(list));
+}
+
+// 메뉴 제목에서 '먹어본 재료/제외 단어'로 설명되지 않는 글자 구간(빨간 표시 대상)을 찾음
+function analyzeName(name, ingredients) {
+  let rest = scanIngredients(name, ingredients).rest;
+  [...getExcludedWords()]
+    .sort((a, b) => b.length - a.length)
+    .forEach((word) => {
+      if (word) rest = rest.split(word).join("\u0000".repeat(word.length));
+    });
+
+  const flags = [];
+  for (let i = 0; i < rest.length; i++) flags.push(/[가-힣A-Za-z]/.test(rest[i]));
+
+  // 재료 바로 뒤에 붙은 조사 한 글자('당근과', '소고기랑')는 무시
+  for (let i = 0; i < rest.length; ) {
+    if (!flags[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < rest.length && flags[j]) j++;
+    if (j - i === 1 && i > 0 && rest[i - 1] === "\u0000" && PARTICLES.includes(rest[i])) flags[i] = false;
+    i = j;
+  }
+
+  const segments = [];
+  const words = [];
+  for (let i = 0; i < name.length; ) {
+    let j = i;
+    while (j < name.length && flags[j] === flags[i]) j++;
+    const text = name.slice(i, j);
+    segments.push({ text, unknown: flags[i] });
+    if (flags[i]) words.push(text);
+    i = j;
+  }
+  return { segments, words: [...new Set(words)] };
+}
+
+function unknownSpan(text) {
+  const span = document.createElement("span");
+  span.className = "unknown-word";
+  span.textContent = text;
+  return span;
+}
+
+// 메뉴 제목을 출력하면서 모르는 단어만 빨간색으로
+function appendMealName(parent, name, ingredients) {
+  analyzeName(name, ingredients).segments.forEach(({ text, unknown }) => {
+    parent.append(unknown ? unknownSpan(text) : text);
+  });
+}
+
+// 입력창 아래 알림: 지금 입력한 제목에서 먹어본 재료에 없는 단어
+function updateUnknownHint() {
+  const { words } = analyzeName(mealName.value, getIngredients());
+  unknownHint.hidden = !words.length;
+  unknownHint.replaceChildren();
+  if (!words.length) return;
+
+  const text = document.createElement("span");
+  text.append("먹어본 재료에 없는 단어: ");
+  words.forEach((word, index) => {
+    if (index) text.append(", ");
+    text.append(unknownSpan(word));
+  });
+  unknownHint.append(icon("circle-alert"), text);
+  refreshIcons();
 }
 
 function mealText(meal) {
@@ -216,7 +311,10 @@ function getDayMemos() {
 }
 
 function updateMemoButton() {
-  memoButton.textContent = getDayMemos()[selectedDateKey] ? "📝 오늘의 메모 ✓" : "📝 오늘의 메모";
+  const nodes = [icon("sticky-note"), " 오늘의 메모"];
+  if (getDayMemos()[selectedDateKey]) nodes.push(icon("check"));
+  memoButton.replaceChildren(...nodes);
+  refreshIcons();
 }
 
 // 재료 카드: 카테고리 필터 + 재료 목록(추가/삭제) + 재료별 횟수/첫 섭취일
@@ -286,25 +384,33 @@ function renderIngredients() {
       name.className = "ingredient-name";
       name.textContent = ing.name;
       if (ing.aliases && ing.aliases.length) {
+        // 한 줄: 키워드 목록(길면 ...) + 끝에 총 개수
+        const keywords = ing.aliases.join(", ");
         const alias = document.createElement("small");
         alias.className = "ingredient-alias";
-        alias.textContent = ing.aliases.join(", ");
+
+        const text = document.createElement("span");
+        text.className = "alias-text";
+        text.textContent = keywords;
+        text.title = keywords;
+
+        const count = document.createElement("span");
+        count.className = "alias-count";
+        count.textContent = `총 ${ing.aliases.length}개`;
+
+        alias.append(text, count);
         name.appendChild(alias);
       }
 
-      const meta = document.createElement("span");
-      meta.className = "ingredient-meta";
-      meta.textContent = stat ? `${stat.count}회 · ${stat.first.slice(5).replace("-", "/")}` : "";
-
       const edit = document.createElement("button");
       edit.className = "entry-btn";
-      edit.textContent = "✎";
+      edit.append(icon("pencil"));
       edit.title = "재료 수정";
       edit.addEventListener("click", () => openIngredientEdit(ing));
 
       const del = document.createElement("button");
       del.className = "entry-btn danger";
-      del.textContent = "✕";
+      del.append(icon("x"));
       del.addEventListener("click", () => {
         if (!confirm(`'${ing.name}' 재료를 삭제할까요?`)) return;
         saveIngredients(getIngredients().filter((item) => item.id !== ing.id));
@@ -312,10 +418,11 @@ function renderIngredients() {
         renderCalendar();
       });
 
-      row.append(dot, name, meta, edit, del);
+      row.append(dot, name, edit, del);
       ingredientList.appendChild(row);
     });
   });
+  refreshIcons();
 }
 
 function updateStartInfo() {
@@ -415,7 +522,8 @@ function renderCalendar() {
           dot.title = cat;
           mealItem.appendChild(dot);
         });
-        mealItem.append(meal.name + (meal.memo ? " 📝" : ""));
+        appendMealName(mealItem, meal.name, allIngredients);
+        if (meal.memo) mealItem.append(" ", icon("sticky-note"));
         mealItem.title = meal.memo ? `${meal.name}\n${meal.memo}` : meal.name;
         mealList.appendChild(mealItem);
       });
@@ -424,7 +532,7 @@ function renderCalendar() {
     if (dayMemos[dateKey]) {
       const memoLine = document.createElement("div");
       memoLine.className = "day-memo";
-      memoLine.textContent = `📝 ${dayMemos[dateKey]}`;
+      memoLine.textContent = dayMemos[dateKey];
       mealList.appendChild(memoLine);
     }
 
@@ -445,6 +553,7 @@ function renderCalendar() {
     emptyDay.className = "calendar-day empty";
     calendarGrid.appendChild(emptyDay);
   }
+  refreshIcons();
 }
 
 // 입력 폼을 '새 기록 추가' 상태로 초기화
@@ -456,11 +565,13 @@ function resetForm() {
   formTitle.textContent = "새 기록 추가";
   saveButton.textContent = "추가";
   cancelButton.textContent = "닫기";
+  updateUnknownHint();
 }
 
 // 모달 상단: 선택한 날짜의 기존 기록 목록
 function renderEntries() {
   const list = getMeals()[selectedDateKey] || [];
+  const ingredients = getIngredients();
   entryList.innerHTML = "";
 
   if (!list.length) {
@@ -481,7 +592,7 @@ function renderEntries() {
 
     const name = document.createElement("div");
     name.className = "entry-name";
-    name.textContent = meal.name;
+    appendMealName(name, meal.name, ingredients);
     if (meal.amount != null) {
       const amount = document.createElement("span");
       amount.className = "entry-amount";
@@ -524,6 +635,7 @@ function startEdit(meal) {
   formTitle.textContent = "기록 수정";
   saveButton.textContent = "수정 저장";
   cancelButton.textContent = "수정 취소";
+  updateUnknownHint();
   renderEntries();
   mealName.focus();
 }
@@ -563,6 +675,8 @@ function closeModal() {
   selectedDateKey = null;
   editingId = null;
 }
+
+mealName.addEventListener("input", updateUnknownHint);
 
 startDateInput.value = localStorage.getItem(START_DATE_KEY) || "";
 dDayDateInput.value = localStorage.getItem(D_DAY_DATE_KEY) || "";
@@ -856,6 +970,7 @@ function parseBackup(text) {
     [DAY_MEMO_KEY]: isPlainObject,
     [NOTES_KEY]: isPlainObject,
     [INGREDIENT_KEY]: Array.isArray,
+    [EXCLUDED_KEY]: Array.isArray,
   };
   const valid = Object.entries(shape).every(([key, check]) => !(key in data) || check(data[key]));
   return valid ? data : null;
@@ -908,6 +1023,54 @@ document.getElementById("settingsClose").addEventListener("click", () => {
 });
 settingsOverlay.addEventListener("click", (event) => {
   if (event.target === settingsOverlay) settingsOverlay.classList.remove("show");
+});
+
+// 알림 제외 단어 (설정 모달)
+const excludeList = document.getElementById("excludeList");
+const excludeInput = document.getElementById("excludeInput");
+
+function renderExcluded() {
+  const words = getExcludedWords();
+  excludeList.replaceChildren();
+
+  if (!words.length) {
+    const empty = document.createElement("div");
+    empty.className = "backup-hint";
+    empty.textContent = "제외한 단어가 없어요.";
+    excludeList.appendChild(empty);
+    return;
+  }
+
+  words.forEach((word) => {
+    const chip = document.createElement("span");
+    chip.className = "exclude-chip";
+    chip.append(word);
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.setAttribute("aria-label", `${word} 삭제`);
+    del.append(icon("x"));
+    del.addEventListener("click", () => {
+      saveExcludedWords(getExcludedWords().filter((item) => item !== word));
+      renderExcluded();
+      renderCalendar();
+    });
+
+    chip.append(del);
+    excludeList.appendChild(chip);
+  });
+  refreshIcons();
+}
+
+document.getElementById("excludeForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const added = parseKeywords(excludeInput.value);
+  if (!added.length) return;
+
+  saveExcludedWords([...new Set([...getExcludedWords(), ...added])]);
+  excludeInput.value = "";
+  renderExcluded();
+  renderCalendar();
 });
 
 // 헤더 메모: 달별 / 전체 공통 탭
@@ -984,5 +1147,6 @@ themeToggle.addEventListener("click", () => {
 ensureDefaultAliases();
 setIngredientCard(desktopQuery.matches);
 updateStartInfo();
+renderExcluded();
 renderIngredients();
 renderCalendar();

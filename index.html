@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>이유식 달력</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <link rel="stylesheet" href="style.css" />
   <script>document.documentElement.dataset.theme = localStorage.getItem("baby-food-theme") === "dark" ? "dark" : "light";</script>
 </head>
@@ -11,15 +13,15 @@
   <header class="header">
     <div class="header-inner">
       <div class="month-navigation">
-        <button class="nav-button" id="prevMonth" aria-label="이전 달">‹</button>
+        <button class="nav-button" id="prevMonth" aria-label="이전 달"><i data-lucide="chevron-left"></i></button>
         <div class="month-title" id="monthTitle"></div>
-        <button class="nav-button" id="nextMonth" aria-label="다음 달">›</button>
+        <button class="nav-button" id="nextMonth" aria-label="다음 달"><i data-lucide="chevron-right"></i></button>
       </div>
       <div class="header-actions">
-        <button class="today-button" id="ingredientToggle" title="먹어본 재료">🥕<span class="btn-text"> 재료</span></button>
-        <button class="today-button" id="noteButton" title="메모">📝<span class="btn-text"> 메모</span></button>
+        <button class="today-button" id="ingredientToggle" title="먹어본 재료"><i data-lucide="carrot"></i><span class="btn-text"> 재료</span></button>
+        <button class="today-button" id="noteButton" title="메모"><i data-lucide="sticky-note"></i><span class="btn-text"> 메모</span></button>
         <button class="today-button" id="todayButton">오늘</button>
-        <button class="today-button" id="settingsButton" title="설정">⚙️<span class="btn-text"> 설정</span></button>
+        <button class="today-button" id="settingsButton" title="설정"><i data-lucide="settings"></i><span class="btn-text"> 설정</span></button>
       </div>
     </div>
   </header>
@@ -42,7 +44,7 @@
     </section>
   <aside class="ingredient-card" id="ingredientCard">
     <div class="ingredient-head">
-      <strong>🥕 먹어본 재료</strong>
+      <strong><i data-lucide="carrot"></i> 먹어본 재료</strong>
       <button class="entry-btn" id="ingredientClose">닫기</button>
     </div>
     <form class="ingredient-form" id="ingredientForm">
@@ -70,6 +72,7 @@
       <div class="input-group">
         <label for="mealName">이유식 메뉴</label>
         <input type="text" id="mealName" placeholder="예: 소고기 감자 미음" />
+        <div class="unknown-hint" id="unknownHint" hidden></div>
       </div>
 
       <div class="input-group">
@@ -86,7 +89,7 @@
       </div>
 
       <div class="modal-buttons">
-        <button class="button memo" id="memoButton">📝 오늘의 메모</button>
+        <button class="button memo" id="memoButton"><i data-lucide="sticky-note"></i> 오늘의 메모</button>
         <button class="button secondary" id="cancelButton">닫기</button>
         <button class="button primary" id="saveButton">추가</button>
       </div>
@@ -109,7 +112,7 @@
 
   <div class="modal-overlay" id="settingsOverlay">
     <div class="modal" role="dialog" aria-modal="true">
-      <h2 class="modal-title">⚙️ 설정</h2>
+      <h2 class="modal-title"><i data-lucide="settings"></i> 설정</h2>
 
       <div class="input-group">
         <label for="startDateInput">이유식 시작일</label>
@@ -125,6 +128,16 @@
         </div>
       </div>
 
+      <div class="input-group">
+        <label for="excludeInput">알림 제외 단어</label>
+        <form class="exclude-form" id="excludeForm">
+          <input type="text" id="excludeInput" placeholder="예: 미음, 죽 (쉼표로 여러 개)" />
+          <button type="submit" class="button secondary">추가</button>
+        </form>
+        <div class="exclude-list" id="excludeList"></div>
+        <div class="backup-hint">이유식 제목에 이 단어가 있어도 빨간색으로 표시하지 않아요.</div>
+      </div>
+
       <div class="input-group setting-row">
         <label for="themeToggle">다크모드</label>
         <button type="button" class="theme-toggle" id="themeToggle" role="switch" aria-checked="false"><span class="theme-toggle-knob"></span></button>
@@ -133,8 +146,8 @@
       <div class="input-group">
         <label>데이터 백업</label>
         <div class="backup-row">
-          <button class="button secondary" id="exportButton" type="button">⬇️ 내보내기</button>
-          <button class="button secondary" id="importButton" type="button">⬆️ 불러오기</button>
+          <button class="button secondary" id="exportButton" type="button"><i data-lucide="download"></i> 내보내기</button>
+          <button class="button secondary" id="importButton" type="button"><i data-lucide="upload"></i> 불러오기</button>
         </div>
         <div class="backup-hint">설정, 이유식 기록, 재료, 메모를 JSON 파일 하나로 저장하거나 불러와요.</div>
         <input type="file" id="importFile" accept=".json,application/json" hidden />
@@ -148,7 +161,7 @@
 
   <div class="modal-overlay" id="noteOverlay">
     <div class="modal note-modal" role="dialog" aria-modal="true">
-      <h2 class="modal-title">📝 메모</h2>
+      <h2 class="modal-title"><i data-lucide="sticky-note"></i> 메모</h2>
 
       <div class="tabs">
         <button class="tab active" id="noteTabMonth" type="button"></button>
@@ -169,7 +182,7 @@
 
   <div class="modal-overlay" id="ingredientEditOverlay">
     <div class="modal" role="dialog" aria-modal="true">
-      <h2 class="modal-title">🥕 재료 수정</h2>
+      <h2 class="modal-title"><i data-lucide="carrot"></i> 재료 수정</h2>
 
       <div class="input-group">
         <label for="ingEditName">재료 이름</label>
@@ -193,6 +206,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
